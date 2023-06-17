@@ -4,7 +4,7 @@ import sys
 import math
 
 # Number of points on the string
-NUMBER_OF_POINTS = 200
+NUMBER_OF_POINTS = 500
 
 # Point magnitude setup
 point_magnitudes_current  = [0.0] * NUMBER_OF_POINTS
@@ -109,22 +109,24 @@ def plot_values(values):
 def main():
     while timestep_current <= TIMESTEP_MAX:
         # Oscillate a specific point
-        OSC_TIME = 360.0
+        OSC_TIME = 360
         OSC_STRENGTH = 5.0
         OSC_TARGET_INDEX = 100
         if time_current <= OSC_TIME:
-            osc_angle = time_current % 360
+            osc_angle = (time_current) % 360
             point_magnitudes_current[OSC_TARGET_INDEX] = math.sin(math.radians(osc_angle)) * OSC_STRENGTH
-            print(osc_angle, point_magnitudes_current[100])
+            #print(osc_angle, point_magnitudes_current[100])
         elif time_current < OSC_TIME + 50:
             point_magnitudes_current[OSC_TARGET_INDEX] = 0
 
         # Freeze a specific point, in this case the one on the far end
         point_magnitudes_current[NUMBER_OF_POINTS - 1] = 0
 
-        plot_values(point_magnitudes_current)
+        #plot_values(point_magnitudes_current)
         time.sleep(TIMESTEP_DURATION_SECONDS)
         iterate_timestep()
 
 if __name__ == '__main__':
+    start_time = time.time()
     main()
+    print("--- %s seconds ---" % (time.time() - start_time))
