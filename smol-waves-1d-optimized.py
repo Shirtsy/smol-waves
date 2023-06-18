@@ -5,7 +5,7 @@ import math
 import numpy as np
 
 # Number of points on the string
-NUMBER_OF_POINTS = 500
+NUMBER_OF_POINTS = 500000
 
 # Point magnitude setup
 point_magnitudes_current  = np.zeros(NUMBER_OF_POINTS)
@@ -13,8 +13,8 @@ point_magnitudes_previous = np.copy(point_magnitudes_current)
 
 # Time setup
 TIMESTEP_LENGTH = 10
-TIMESTEP_MAX = 5000
-TIMESTEP_DURATION_SECONDS = 0.01
+TIMESTEP_MAX = 500
+TIMESTEP_DURATION_SECONDS = 0.00
 
 time_current = 0
 timestep_current = 0
@@ -82,8 +82,8 @@ def iterate_timestep():
     point_magnitudes_new = calculate_new_magnitudes(point_magnitudes_current, point_magnitudes_previous)
 
     # Update the other two point magnitude lists
-    point_magnitudes_previous = np.copy(point_magnitudes_current)
-    point_magnitudes_current  = np.copy(point_magnitudes_new)
+    np.copyto(point_magnitudes_previous, point_magnitudes_current)
+    np.copyto(point_magnitudes_current,  point_magnitudes_new)
 
 # Function from ChatGPT to handle closing the program when the plot is closed
 def handle_close(evt):
@@ -142,4 +142,4 @@ def main():
 if __name__ == '__main__':
     start_time = time.time()
     main()
-    print("--- %s seconds ---" % (time.time() - start_time))
+    print("--- {0} seconds for {1} timesteps of {2} points = {3} FPS ---".format(time.time() - start_time, TIMESTEP_MAX, NUMBER_OF_POINTS, TIMESTEP_MAX/(time.time() - start_time)))

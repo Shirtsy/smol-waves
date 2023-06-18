@@ -4,7 +4,7 @@ import sys
 import math
 
 # Number of points on the string
-NUMBER_OF_POINTS = 500
+NUMBER_OF_POINTS = 500000
 
 # Point magnitude setup
 point_magnitudes_current  = [0.0] * NUMBER_OF_POINTS
@@ -12,8 +12,8 @@ point_magnitudes_previous = point_magnitudes_current.copy()
 
 # Time setup
 TIMESTEP_LENGTH = 10
-TIMESTEP_MAX = 5000
-TIMESTEP_DURATION_SECONDS = 0.01
+TIMESTEP_MAX = 500
+TIMESTEP_DURATION_SECONDS = 0.00
 
 time_current = 0
 timestep_current = 0
@@ -129,4 +129,4 @@ def main():
 if __name__ == '__main__':
     start_time = time.time()
     main()
-    print("--- %s seconds ---" % (time.time() - start_time))
+    print("--- {0} seconds for {1} timesteps of {2} points = {3} FPS ---".format(time.time() - start_time, TIMESTEP_MAX, NUMBER_OF_POINTS, TIMESTEP_MAX/(time.time() - start_time)))
