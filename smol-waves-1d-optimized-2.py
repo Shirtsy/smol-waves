@@ -19,66 +19,61 @@ SPRING_MULTIPLIER = 1
 # Velocity is multiplied by this value before other calculations, adds a damping effect over time
 VELOCITY_MULTIPLIER = 1
 
-
-# Rolls a 1D array by the specified amount, pads the extra space with zeros instead of rolling over edge
-def roll_padded_array(array: np.ndarray, roll_distance: int) -> np.ndarray:
-    if roll_distance != 0:
-        new_array = np.insert(array, 0, np.zeros(abs(roll_distance)))
-        new_array = np.append(new_array, np.zeros(abs(roll_distance)))
-
-        new_array = np.roll(new_array, roll_distance)
-
-        # Crate array of indices based on input number to delete the added space
-        deletion_array = np.arange(abs(roll_distance))
-        deletion_array = np.append(deletion_array, deletion_array + (new_array.size-1) - (deletion_array.size-1) )
-
-        new_array = np.delete(new_array, deletion_array)
-        return new_array
-    else:
-        return array
+# Returns a dictionary of all pre-allocated arrays to be used in the rest of the simulation
+def preallocate_arrays() -> dict:
+    state = {
+    "point_magnitudes_current"  : np.zeros(NUMBER_OF_POINTS),
+    "point_magnitudes_previous" : np.zeros(NUMBER_OF_POINTS),
+    "point_magnitudes_new"      : np.zeros(NUMBER_OF_POINTS),
+    "point_velocities"          : np.zeros(NUMBER_OF_POINTS),
+    "point_accelerations"       : np.zeros(NUMBER_OF_POINTS),
+    "rolled_array"              : np.zeros(NUMBER_OF_POINTS),
+    "relative_total"            : np.zeros(NUMBER_OF_POINTS),
+    "array_ends"                : np.zeros(NUMBER_OF_POINTS, dtype= bool),
+    "time_current"     : 0,
+    "timestep_current" : 0
+    }
+    np.put(state["array_ends"], [0,NUMBER_OF_POINTS-1], 1)
+    return state
 
 # Calculates a new array with updated magnitudes when given an array at a timestep and the previous timestep
-def calculate_new_magnitudes(current_magnitudes: np.ndarray, previous_magnitudes: np.ndarray) -> np.ndarray:
-    # Get the velocity of all points based on current and previous magnitudes
-    point_velocities = ((current_magnitudes - previous_magnitudes) / TIMESTEP_LENGTH) * VELOCITY_MULTIPLIER
+def update_point_magnitudes(state: dict):
+    # Get current velocity of all points
+    np.subtract(state["point_magnitudes_current"], state["point_magnitudes_previous"], out= state["point_velocities"])
+    np.divide(state["point_velocities"], TIMESTEP_LENGTH, out= state["point_velocities"])
+    np.multiply(state["point_velocities"], VELOCITY_MULTIPLIER, out= state["point_velocities"])
 
-    # Get the total relative magnitude of neighboring points
-    relative_neighbor_magnitudes_left  = roll_padded_array(current_magnitudes, 1) - current_magnitudes
-    relative_neighbor_magnitudes_right = roll_padded_array(current_magnitudes, -1) - current_magnitudes
-    relative_neighbor_magnitudes_total = relative_neighbor_magnitudes_left + relative_neighbor_magnitudes_right
+    # Get total relative magnitude of neighboring points
+    for i in [-1,1]:
+        np.copyto(state["rolled_array"], state["point_magnitudes_current"])
+        np.roll(state["rolled_array"], i)
+        # Copy current values into ends of rolled array to return zero during the math for the end bits
+        np.copyto(state["rolled_array"], state["point_magnitudes_current"], where= state["array_ends"])
+        np.subtract(state["rolled_array"], state["point_magnitudes_current"], out= state["rolled_array"])
+        np.add(state["relative_total"], state["rolled_array"], out= state["relative_total"])
 
     # Calculate point accelerations
-    point_accelerations = relative_neighbor_magnitudes_total * SPRING_MULTIPLIER
+    np.multiply(state["relative_total"], SPRING_MULTIPLIER, out= state["point_accelerations"])
 
-    # Calculate new point velocities
-    new_point_velocities = point_velocities + (point_accelerations / TIMESTEP_LENGTH)
+    # Update point velocities
+    np.divide(state["point_accelerations"], TIMESTEP_LENGTH, out= state["point_accelerations"])
+    np.add(state["point_velocities"], state["point_accelerations"], out= state["point_velocities"])
 
-    # Calculate change in magnitude for points based on velocity
-    point_magnitude_deltas = new_point_velocities * TIMESTEP_LENGTH
+    # Calculate delta based on velocity, then assign it to velocity array
+    np.multiply(state["point_velocities"], TIMESTEP_LENGTH, out= state["point_velocities"])
 
-    # Calculate new magnitudes based on distance based on magnitude deltas
-    new_current_point_magnitudes = current_magnitudes + point_magnitude_deltas
-
-    return new_current_point_magnitudes
+    # Update magnitudes based on the delta
+    np.add(state["point_magnitudes_current"], state["point_velocities"], out= state["point_magnitudes_current"])
 
 
 # Iterates the simulation by one timestep
 def iterate_timestep(state: dict):
-    global point_magnitudes_current
-    global point_magnitudes_previous
-    global active_state["time_current"]
-    global timestep_current
-
     # Tick the clock up
-    timestep_current += 1
-    active_state["time_current"]     += TIMESTEP_LENGTH
+    state["timestep_current"] += 1
+    state["time_current"]     += TIMESTEP_LENGTH
 
-    # Use function to make new point magnitudes list
-    point_magnitudes_new = calculate_new_magnitudes(point_magnitudes_current, point_magnitudes_previous)
+    update_point_magnitudes(state)
 
-    # Update the other two point magnitude lists
-    np.copyto(point_magnitudes_previous, point_magnitudes_current)
-    np.copyto(point_magnitudes_current,  point_magnitudes_new)
 
 # Function from ChatGPT to handle closing the program when the plot is closed
 def handle_close(evt):
@@ -114,34 +109,26 @@ def plot_values(values):
     plt.gcf().canvas.mpl_connect('close_event', handle_close)
 
 def main():
-    # Point magnitude and time setup
-    active_state = {
-    "point_magnitudes_current"  : np.zeros(NUMBER_OF_POINTS),
-    "point_magnitudes_previous" : np.copy(point_magnitudes_current),
-    "point_magnitudes_new"      : np.empty(NUMBER_OF_POINTS),
-    "time_current"     : 0,
-    "timestep_current" : 0
-    }
-
-    while timestep_current <= TIMESTEP_MAX:
+    state = preallocate_arrays()
+    while state["timestep_current"] <= TIMESTEP_MAX:
         # Oscillate a specific point
         OSC_TIME = 360
         OSC_STRENGTH = 5.0
         OSC_TARGET_INDEX = 100
-        if active_state["time_current"] <= OSC_TIME:
-            osc_angle = (active_state["time_current"]) % 360
-            point_magnitudes_current[OSC_TARGET_INDEX] = math.sin(math.radians(osc_angle)) * OSC_STRENGTH
-            #print(osc_angle, point_magnitudes_current[OSC_TARGET_INDEX])
-        elif active_state["time_current"] < OSC_TIME + 50:
-            point_magnitudes_current[OSC_TARGET_INDEX] = 0
+        if state["time_current"] <= OSC_TIME:
+            osc_angle = (state["time_current"]) % 360
+            state["point_magnitudes_current"][OSC_TARGET_INDEX] = math.sin(math.radians(osc_angle)) * OSC_STRENGTH
+            #print(osc_angle, state["point_magnitudes_current"][OSC_TARGET_INDEX])
+        elif state["time_current"] < OSC_TIME + 50:
+            state["point_magnitudes_current"][OSC_TARGET_INDEX] = 0
 
         # Freeze a specific point, in this case the one on the far end
-        point_magnitudes_current[NUMBER_OF_POINTS - 1] = 0
+        state["point_magnitudes_current"][NUMBER_OF_POINTS - 1] = 0
 
         #print(point_magnitudes_current)
         #plot_values(point_magnitudes_current)
         time.sleep(TIMESTEP_DURATION_SECONDS)
-        iterate_timestep()
+        iterate_timestep(state)
 
 
 if __name__ == '__main__':
